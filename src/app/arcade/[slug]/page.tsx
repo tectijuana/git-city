@@ -3,6 +3,7 @@
 import { useRef, useEffect, useLayoutEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserSupabase } from "@/lib/supabase";
+import { signInWithGitHub } from "@/lib/sign-in";
 import type { PlayerState, ChatBubble, ChatLogEntry, Direction, AvatarConfig } from "@/lib/arcade/types";
 import { startGameLoop } from "@/lib/arcade/engine/gameLoop";
 import { loadSpritesheet, loadCozySprites, updateSpriteAnimation, resetSprites, loadPetSprites, resetPet, setActivePet, registerShopItems, setPlayerAvatar, preloadLoadout, getDefaultLoadout, loadoutToAvatar, type CozyLayer } from "@/lib/arcade/engine/sprites";
@@ -1027,10 +1028,7 @@ export default function ArcadeRoomPage({
               <button
                 onClick={async () => {
                   const supabase = createBrowserSupabase();
-                  await supabase.auth.signInWithOAuth({
-                    provider: "github",
-                    options: { redirectTo: `${window.location.origin}/arcade` },
-                  });
+                  await signInWithGitHub(supabase, `${window.location.origin}/arcade`);
                 }}
                 className="cursor-pointer rounded-[4px] px-6 py-2.5 text-[11px] font-bold tracking-widest uppercase transition-all hover:brightness-95"
                 style={{

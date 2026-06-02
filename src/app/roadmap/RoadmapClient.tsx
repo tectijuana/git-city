@@ -3,6 +3,7 @@
 import { useCallback, useOptimistic, useState, useTransition } from "react";
 import Link from "next/link";
 import { createBrowserSupabase } from "@/lib/supabase";
+import { signInWithGitHub } from "@/lib/sign-in";
 import { ROADMAP_PHASES, VOTABLE_ITEM_IDS } from "@/lib/roadmap-data";
 import type { RoadmapPhase, RoadmapItem, ItemStatus } from "@/lib/roadmap-data";
 import { toggleVote } from "./actions";
@@ -67,10 +68,7 @@ export default function RoadmapClient({
 
   const handleSignIn = useCallback(async () => {
     const supabase = createBrowserSupabase();
-    await supabase.auth.signInWithOAuth({
-      provider: "github",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    });
+    await signInWithGitHub(supabase, `${window.location.origin}/auth/callback`);
   }, []);
 
   return (
