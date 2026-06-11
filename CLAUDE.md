@@ -55,6 +55,8 @@ supabase/
 - **NEVER include Cozy PNGs in git add** — the `public/cozy/` folder is gitignored.
 - Forkers must buy their own license from shubibubi on itch.io, place files in `public/cozy/`, then run `node --env-file=.env.local scripts/upload-arcade-assets.mjs` to seed the `arcade-assets` Supabase bucket.
 - Original purchase links: https://shubibubi.itch.io/cozy-people and https://shubibubi.itch.io/cozy-interior
+- **Kenney models** (`public/models/trees/*.glb`, `public/models/props/*.glb`): from [Kenney](https://kenney.nl) Nature Kit / City Kit (CC0 — public domain). Free to use, modify, and redistribute; attribution appreciated but not required. These ARE in the repo. Raw unpacked kit folders stay local (`kenney/` is gitignored).
+- **San Francisco map** (`public/maps/sf.json`): baked from [OpenStreetMap](https://www.openstreetmap.org/copyright) data via `scripts/bake-sf-map.mjs`. OSM data is **ODbL** — the "© OpenStreetMap contributors" credit MUST stay visible on the SF map (rendered in `home-client.tsx`). Regenerate with `node scripts/bake-sf-map.mjs`.
 
 ## Key files
 
