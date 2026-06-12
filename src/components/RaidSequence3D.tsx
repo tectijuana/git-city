@@ -500,7 +500,9 @@ function HackerRigMesh() {
   });
 
   return (
-    <group>
+    // Modeled facing +Z; rotate to the -Z "front" convention so it matches the
+    // other vehicles in flight and in thumbnails/previews.
+    <group rotation={[0, Math.PI, 0]}>
       {/* Desk surface (compact beige wood, matching CRT housing) */}
       <mesh position={[0, -0.1, 0]}>
         <boxGeometry args={[4, 0.18, 2.4]} />
