@@ -90,8 +90,12 @@ export interface PerfModeApi {
 // (toast), but only the user flips it. Automatic mid-session downgrades swap
 // the city's whole look (bloom, DPR), which was jarring during the intro.
 export function usePerfMode(): PerfModeApi {
-  // Lazy initializers are SSR-safe (readers guard window access) and nothing
-  // that depends on the mode renders on the server, so no hydration mismatch.
+  // Lazy initializers are SSR-safe (readers guard window access), but they
+  // resolve to different values on the server ("auto"/"high") vs the client's
+  // first render (stored/cached tier). Components that render the resulting
+  // mode during hydration — e.g. GraphicsControl's HIGH/LOW label — must use
+  // suppressHydrationWarning, since the tier is intentionally read synchronously
+  // (the scene needs it before the first frame) rather than deferred to an effect.
   const [preference, setPreferenceState] = useState<PerfPreference>(
     () => readUrlOverride() ?? readStoredPreference(),
   );

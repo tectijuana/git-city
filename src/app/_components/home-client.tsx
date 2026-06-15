@@ -28,7 +28,8 @@ import type { Assignment } from "@/lib/landmarks/types";
 import { getLandmarkAdId } from "@/lib/sponsors/landmarkAdIds";
 import Image from "next/image";
 import Link from "next/link";
-import ActivityTicker, { type FeedEvent } from "@/components/ActivityTicker";
+import CityPulse from "@/components/activity/CityPulse";
+import { type FeedEvent } from "@/components/activity/feed";
 import { ITEM_NAMES, ITEM_EMOJIS } from "@/lib/zones";
 import PixelEmblem from "@/components/profile/PixelEmblem";
 import { useStreakCheckin } from "@/lib/useStreakCheckin";
@@ -92,7 +93,7 @@ const CityCanvas = dynamic(() => import("@/components/CityCanvas"), {
 const BossEventHUD = dynamic(() => import("@/components/BossEventHUD"), { ssr: false });
 const BossInvasionCard = dynamic(() => import("@/components/BossInvasionCard"), { ssr: false });
 
-const ActivityPanel = dynamic(() => import("@/components/ActivityPanel"), { ssr: false });
+const ActivityHub = dynamic(() => import("@/components/activity/ActivityHub"), { ssr: false });
 const DailiesWidget = dynamic(() => import("@/components/DailiesWidget"), { ssr: false });
 const RaidPreviewModal = dynamic(() => import("@/components/RaidPreviewModal"), { ssr: false });
 const RaidOverlay = dynamic(() => import("@/components/RaidOverlay"), { ssr: false });
@@ -292,7 +293,11 @@ function GraphicsControl({
       >
         <span style={{ color: accent }}>&#9670;</span>
         <span className="text-cream">Graphics</span>
-        <span className="text-dim">{mode === "high" ? "HIGH" : "LOW"}</span>
+        {/* The tier is resolved from client-only signals (localStorage, ?perf=,
+            GPU heuristic) so it legitimately differs from the SSR fallback
+            ("high"). Suppress the one-render text mismatch instead of deferring
+            the read, which the scene needs synchronously before the first frame. */}
+        <span className="text-dim" suppressHydrationWarning>{mode === "high" ? "HIGH" : "LOW"}</span>
       </button>
     </div>
   );
@@ -721,6 +726,9 @@ function HomeContent({ resolvedSponsors }: HomeContentProps) {
   const [claimingGift, setClaimingGift] = useState(false);
   const [feedEvents, setFeedEvents] = useState<FeedEvent[]>([]);
   const [feedPanelOpen, setFeedPanelOpen] = useState(false);
+  // Visible feedback while opening a dev from the activity feed (the search
+  // feedback UI only renders on the landing/compare screens, not in explore).
+  const [feedNav, setFeedNav] = useState<{ login: string; phase: "loading" | "error" | "pending" } | null>(null);
   const [kudosSending, setKudosSending] = useState(false);
   const [kudosSent, setKudosSent] = useState(false);
   const [kudosError, setKudosError] = useState<string | null>(null);
@@ -2125,9 +2133,15 @@ function HomeContent({ resolvedSponsors }: HomeContentProps) {
     }
   }, [giftedParam, userParam, buildings, reloadCity]);
 
-  const searchUser = useCallback(async () => {
-    const trimmed = username.trim().toLowerCase();
-    if (!trimmed) return;
+  // Optional `targetLogin` lets other surfaces (e.g. the activity feed) drive
+  // the exact same search/focus flow — with all its guard rails, error
+  // feedback and dev injection — instead of reimplementing it. When omitted,
+  // it falls back to the search input. A non-string arg (e.g. a click event
+  // from onRetry) is treated as "from input".
+  const searchUser = useCallback(async (targetLogin?: string) => {
+    const fromInput = typeof targetLogin !== "string";
+    const trimmed = (typeof targetLogin === "string" ? targetLogin : username).trim().toLowerCase();
+    if (!trimmed) return "none" as const;
 
     trackSearchUsed(trimmed);
 
@@ -2135,7 +2149,7 @@ function HomeContent({ resolvedSponsors }: HomeContentProps) {
     const cachedError = failedUsernamesRef.current.get(trimmed);
     if (cachedError) {
       setFeedback({ type: "error", code: cachedError as NonNullable<typeof feedback>["code"], username: trimmed });
-      return;
+      return "error" as const;
     }
 
     // Snapshot compare state before async work — ESC may clear it mid-flight
@@ -2153,7 +2167,7 @@ function HomeContent({ resolvedSponsors }: HomeContentProps) {
         setCompareSelfHint(true);
         setTimeout(() => setCompareSelfHint(false), 2000);
         setFeedback(null);
-        return;
+        return "none" as const;
       }
 
       // Check if dev already exists in the city before the fetch
@@ -2180,7 +2194,7 @@ function HomeContent({ resolvedSponsors }: HomeContentProps) {
           failedUsernamesRef.current.set(trimmed, code);
         }
         setFeedback({ type: "error", code, username: trimmed, raw: devData.error });
-        return;
+        return "error" as const;
       }
 
       setFeedback(null);
@@ -2188,8 +2202,8 @@ function HomeContent({ resolvedSponsors }: HomeContentProps) {
       // Dev not in the city yet: show invite card instead of creating a building
       if (devData.exists === false && devData.preview) {
         setInvitePreview(devData.preview);
-        setUsername("");
-        return;
+        if (fromInput) setUsername("");
+        return "invite" as const;
       }
 
       // Merge the refreshed dev back into the live city so searches update stats immediately
@@ -2266,8 +2280,8 @@ function HomeContent({ resolvedSponsors }: HomeContentProps) {
             setExploreMode(true);
           }
         }
-      } else if (!existedBefore) {
-        // New developer: show the share modal
+      } else if (!existedBefore && fromInput) {
+        // New developer searched from the input: show the share modal
         setShareData({
           login: devData.github_login,
           contributions: devData.contributions,
@@ -2277,13 +2291,19 @@ function HomeContent({ resolvedSponsors }: HomeContentProps) {
         if (foundBuilding) setSelectedBuilding(foundBuilding);
         setCopied(false);
       } else if (foundBuilding) {
-        // Existing developer: enter explore mode and show profile card
+        // Existing dev (or feed-driven focus): enter explore mode and show card
         setSelectedBuilding(foundBuilding);
         setExploreMode(true);
       }
-      setUsername("");
+      if (fromInput) setUsername("");
+      // The feed needs to know whether a building actually opened. If the dev
+      // exists but couldn't be placed (e.g. brand-new, not in the cached city
+      // snapshot yet), report "pending" so the caller can show a clear message
+      // instead of silently doing nothing.
+      return foundBuilding ? ("focused" as const) : ("pending" as const);
     } catch {
       setFeedback({ type: "error", code: "network", username: trimmed });
+      return "error" as const;
     } finally {
       setLoading(false);
     }
@@ -2294,6 +2314,48 @@ function HomeContent({ resolvedSponsors }: HomeContentProps) {
     e.preventDefault();
     searchUser();
   };
+
+  // Drive the activity feed's "open this dev" through the same search flow,
+  // with a visible loading/error indicator. Keeps the hub open while loading
+  // so there's context, closes it on success, and surfaces a retry on failure.
+  const openDeveloperFromFeed = useCallback(
+    async (login: string) => {
+      const l = login.trim().toLowerCase();
+      if (!l) return;
+
+      // Fast path: the dev is already a building in the loaded city — fly to it
+      // instantly, no full re-layout, no network.
+      const local = buildings.find((b) => b.login.toLowerCase() === l);
+      if (local) {
+        if (isMobile) setFeedPanelOpen(false);
+        setFocusedBuilding(local.login);
+        setSelectedBuilding(local);
+        if (!exploreMode) setExploreMode(true);
+        return;
+      }
+
+      // Slow path: dev not in the cached snapshot (often a brand-new dev). Try
+      // to inject + place them via the search flow, with visible feedback.
+      setFeedNav({ login: l, phase: "loading" });
+      // On mobile the building card is a bottom sheet that needs the full
+      // screen, so collapse the feed. On desktop keep it open beside the city.
+      if (isMobile) setFeedPanelOpen(false);
+      const status = await searchUser(l);
+      if (status === "focused" || status === "invite") {
+        setFeedNav(null);
+      } else if (status === "pending") {
+        // Exists but has no building yet (city refreshes on a cron).
+        setFeedNav({ login: l, phase: "pending" });
+        setTimeout(() => setFeedNav((c) => (c?.login === l ? null : c)), 5000);
+      } else if (status === "error") {
+        setFeedNav({ login: l, phase: "error" });
+        setTimeout(() => setFeedNav((c) => (c?.login === l ? null : c)), 5000);
+      } else {
+        setFeedNav(null);
+      }
+    },
+    [buildings, exploreMode, isMobile, searchUser]
+  );
 
   const adminAddDeveloper = useCallback(async (login: string) => {
     const trimmed = login.trim().toLowerCase();
@@ -3332,20 +3394,9 @@ function HomeContent({ resolvedSponsors }: HomeContentProps) {
             />
           </div>
 
-          {/* Feed toggle (top-right, below GitHub badges on desktop) */}
-          {feedEvents.length >= 1 && (
-            <div className="pointer-events-auto absolute top-3 right-3 sm:top-4 sm:right-4">
-              <button
-                onClick={() => setFeedPanelOpen(true)}
-                className="flex items-center gap-2 border-[3px] border-border bg-bg/70 px-3 py-1.5 text-[10px] backdrop-blur-sm transition-colors"
-                onMouseEnter={(e) => (e.currentTarget.style.borderColor = theme.accent + "80")}
-                onMouseLeave={(e) => (e.currentTarget.style.borderColor = "")}
-              >
-                <span style={{ color: theme.accent }}>&#9679;</span>
-                <span className="text-cream">Feed</span>
-              </button>
-            </div>
-          )}
+          {/* Feed is opened from the CITY ACTIVITY launcher in the bottom-left
+              bar, anchored where the popover rises. A separate top-right button
+              opened a bottom-left panel (spatial disconnect), so it was removed. */}
 
           {/* Navigation hints (bottom-right) — hidden when building card is open */}
           {!selectedBuilding && (
@@ -5994,24 +6045,16 @@ function HomeContent({ resolvedSponsors }: HomeContentProps) {
         <LevelUpToast level={levelUpLevel} onDone={() => setLevelUpLevel(null)} />
       )}
 
-      {/* ─── Activity Ticker ─── */}
+      {/* ─── City Pulse (ambient live activity) ─── */}
       {!flyMode && !introMode && !rabbitCinematic && feedEvents.length >= 1 && (
-        <ActivityTicker
+        <CityPulse
           events={feedEvents}
+          viewerLogin={authLogin || null}
           hasBottomBar={false}
-          onEventClick={(evt) => {
-            if (compareBuilding || comparePair) return;
-            const login = evt.actor?.login;
-            if (login) {
-              setFocusedBuilding(login);
-              const found = buildings.find(b => b.login.toLowerCase() === login.toLowerCase());
-              if (found) {
-                setSelectedBuilding(found);
-                if (!exploreMode) setExploreMode(true);
-              }
-            }
-          }}
-          onOpenPanel={() => setFeedPanelOpen(true)}
+          hubOpen={feedPanelOpen}
+          onOpenHub={() => setFeedPanelOpen((o) => !o)}
+          onNavigate={openDeveloperFromFeed}
+          onCounterAttack={openDeveloperFromFeed}
         />
       )}
 
@@ -6080,22 +6123,65 @@ function HomeContent({ resolvedSponsors }: HomeContentProps) {
         </div>
       )}
 
-      {/* ─── Activity Panel (slide-in) ─── */}
-      <ActivityPanel
+      {/* ─── Activity Hub (full feed destination) ─── */}
+      <ActivityHub
         initialEvents={feedEvents}
         open={feedPanelOpen}
         onClose={() => setFeedPanelOpen(false)}
-        onNavigate={(login) => {
-          if (compareBuilding || comparePair) return;
-          setFeedPanelOpen(false);
-          setFocusedBuilding(login);
-          const found = buildings.find(b => b.login.toLowerCase() === login.toLowerCase());
-          if (found) {
-            setSelectedBuilding(found);
-            if (!exploreMode) setExploreMode(true);
-          }
-        }}
+        viewerLogin={authLogin || null}
+        onNavigate={openDeveloperFromFeed}
+        onCounterAttack={openDeveloperFromFeed}
       />
+
+      {/* ─── Activity feed navigation indicator ─── */}
+      {feedNav && (
+        <div className="fixed left-1/2 top-16 z-[60] -translate-x-1/2 px-3">
+          <div className="flex items-center gap-2.5 border border-border bg-bg-raised px-3 py-2 shadow-lg shadow-black/50">
+            {feedNav.phase === "loading" ? (
+              <>
+                <span className="blink-dot text-sm" style={{ color: theme.accent }}>_</span>
+                <span className="text-[10px] text-cream normal-case">
+                  Finding @{feedNav.login} in the city...
+                </span>
+              </>
+            ) : feedNav.phase === "pending" ? (
+              <>
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: theme.accent }} />
+                <span className="text-[10px] text-cream normal-case">
+                  @{feedNav.login} just joined — their building appears after the next city refresh.
+                </span>
+                <button
+                  onClick={() => setFeedNav(null)}
+                  className="text-xs text-muted hover:text-cream"
+                  aria-label="Dismiss"
+                >
+                  &#10005;
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-400" />
+                <span className="text-[10px] text-cream normal-case">
+                  Couldn&apos;t open @{feedNav.login}
+                </span>
+                <button
+                  onClick={() => openDeveloperFromFeed(feedNav.login)}
+                  className="border border-border px-2 py-0.5 text-[9px] text-cream transition-colors hover:text-[#c8e64a]"
+                >
+                  Retry
+                </button>
+                <button
+                  onClick={() => setFeedNav(null)}
+                  className="text-xs text-muted hover:text-cream"
+                  aria-label="Dismiss"
+                >
+                  &#10005;
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ─── Feature 4: Post-Flight Results Modal ─── */}
       {showFlyResults && !flyMode && (
