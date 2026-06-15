@@ -61,22 +61,11 @@ docs/
 # partykit local state
 .partykit/
 
-# Local-only dev / asset-pipeline scripts (not needed to run or fork the app).
-# NOTE: scripts/bake-sf-map.mjs (regenerates public/maps/sf.json) and
-# scripts/upload-arcade-assets.mjs (seeds the arcade-assets bucket, per CLAUDE.md)
-# are intentionally NOT ignored — forkers need them.
-scripts/test-*.mjs
-scripts/recolor-*.mjs
-scripts/crop-walk-sprites.mjs
-scripts/gen-seed.mjs
-scripts/restore-from-backup.mjs
-scripts/seed-landmarks.mjs
-scripts/extract-cozy-furniture.py
-scripts/x-thread.txt
-# Bankr sponsor-vehicle GLB pipeline (output is gitignored under public/models/vehicles/)
-scripts/bankr-model.mjs
-scripts/gen-bankr-monitor.mjs
-scripts/render-preview.mjs
+# The scripts/ folder is local-only — scratch tooling, seeders and infra that
+# shouldn't ship. Nothing under it is tracked.
+scripts/
+
+# Bankr sponsor-vehicle GLB pipeline outputs
 public/bankr.svg
 public/bankr-monitor-preview.html
 
