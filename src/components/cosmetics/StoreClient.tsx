@@ -144,7 +144,7 @@ export default function StoreClient({
   const visible = useMemo(() => (hideOwned ? items.filter((i) => !owned.has(i.id)) : items), [items, hideOwned, owned]);
 
   const nextThumb = useMemo<ThumbItem | null>(() => {
-    const it = visible.find((i) => !i.thumbnail_url && !localThumbs[i.id] && classifyItem({ id: i.id, zone: i.slot }) !== "utility");
+    const it = visible.find((i) => !i.thumbnail_url && !localThumbs[i.id] && classifyItem({ id: i.id, zone: i.slot, shop_section: i.shop_section, render_kind: i.render_kind }) !== "utility");
     return it ? { id: it.id, zone: it.slot, render_kind: it.render_kind, render_spec: it.render_spec as unknown as Record<string, unknown> } : null;
   }, [visible, localThumbs]);
 
@@ -155,7 +155,7 @@ export default function StoreClient({
   }, [ownedLookCosmetics, items]);
 
   const selected = useMemo(() => items.find((i) => i.id === selectedId) ?? byId[selectedId ?? ""] ?? null, [items, byId, selectedId]);
-  const selectedKind = useMemo(() => (selected ? classifyItem({ id: selected.id, zone: selected.slot }) : "building"), [selected]);
+  const selectedKind = useMemo(() => (selected ? classifyItem({ id: selected.id, zone: selected.slot, shop_section: selected.shop_section, render_kind: selected.render_kind }) : "building"), [selected]);
 
   const look = useMemo(() => resolveLook({
     byId,

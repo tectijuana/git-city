@@ -7,7 +7,8 @@ import type { Cosmetic } from "@/lib/cosmetics/types";
 import { resolveLook } from "@/lib/cosmetics/look";
 import type { LoadoutPreset } from "@/app/api/loadout/presets/route";
 import type { ThumbItem } from "./ThumbnailFactory";
-import { RAID_VEHICLE_ITEMS, RAID_TAG_ITEMS, RAID_BOOST_ITEMS } from "@/lib/zones";
+import { RAID_TAG_ITEMS, RAID_BOOST_ITEMS } from "@/lib/zones";
+import { classifyItem } from "./itemRenderers";
 
 const CosmeticStage = dynamic(() => import("./CosmeticStage"), {
   ssr: false,
@@ -71,7 +72,7 @@ export default function LockerClient({
   const owned = useMemo(() => ownedCosmetics.map((c) => c.id), [ownedCosmetics]);
 
   const optionsFor = useCallback((s: SlotKey) => {
-    if (s === "vehicle") return ownedCosmetics.filter((c) => RAID_VEHICLE_ITEMS.includes(c.id));
+    if (s === "vehicle") return ownedCosmetics.filter((c) => classifyItem({ id: c.id, zone: c.slot, shop_section: c.shop_section, render_kind: c.render_kind }) === "vehicle");
     if (s === "tag") return ownedCosmetics.filter((c) => RAID_TAG_ITEMS.includes(c.id));
     return ownedCosmetics.filter((c) => c.slot === s);
   }, [ownedCosmetics]);
@@ -101,7 +102,7 @@ export default function LockerClient({
   // Bake thumbnails for building/vehicle/tag cards + the default CRT vehicle.
   const bakeTargets = useMemo<ThumbItem[]>(() => {
     const list = ownedCosmetics
-      .filter((x) => !x.thumbnail_url && (["crown", "roof", "aura"].includes(x.slot ?? "") || RAID_VEHICLE_ITEMS.includes(x.id) || RAID_TAG_ITEMS.includes(x.id)))
+      .filter((x) => !x.thumbnail_url && (["crown", "roof", "aura"].includes(x.slot ?? "") || classifyItem({ id: x.id, zone: x.slot, shop_section: x.shop_section, render_kind: x.render_kind }) === "vehicle" || RAID_TAG_ITEMS.includes(x.id)))
       .map((x) => ({ id: x.id, zone: x.slot, render_kind: x.render_kind, render_spec: x.render_spec as unknown as Record<string, unknown> }));
     list.push({ id: DEFAULT_VEHICLE.id, zone: null, render_kind: "code", render_spec: {} });
     return list;
