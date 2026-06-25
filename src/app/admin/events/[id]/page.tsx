@@ -18,6 +18,18 @@ interface Metrics {
   leaderboard: { rank: number; login: string; damage: number; minions: number; tier: string | null; flagged: boolean }[];
 }
 
+function statusPill(status: string): string {
+  switch (status) {
+    case "live": return "border-lime/50 bg-lime/10 text-lime";
+    case "wrap": return "border-amber-500/50 bg-amber-500/10 text-amber-400";
+    case "scheduled": return "border-border text-muted";
+    case "archived": return "border-border text-dim";
+    default: return "border-border text-muted";
+  }
+}
+
+const MEDAL = ["text-amber-300", "text-zinc-300", "text-orange-400"]; // gold / silver / bronze
+
 function Stat({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
   return (
     <div className="border border-border bg-bg-raised p-4">
@@ -100,10 +112,33 @@ export default function EventMetricsPage({ params }: { params: Promise<{ id: str
     <div className="min-h-screen bg-bg p-4 sm:p-6 lg:p-8">
       <div className="mx-auto max-w-6xl">
         <a href="/admin/events" className="text-[11px] text-muted transition-colors hover:text-cream">← Events</a>
-        <div className="mb-6 mt-2 flex items-baseline gap-3">
-          <h1 className="text-sm text-cream">{s.slug}</h1>
-          <span className="text-[10px] uppercase text-lime">{s.status}</span>
-          {s.outcome && <span className="text-[10px] uppercase text-dim">· {s.outcome}</span>}
+        <div className="mb-5 mt-2 flex flex-wrap items-center gap-3">
+          <h1 className="text-base text-cream">{s.slug}</h1>
+          <span className={`border px-2 py-0.5 text-[9px] uppercase tracking-widest ${statusPill(s.status)}`}>{s.status}</span>
+          {s.outcome && (
+            <span className={`border px-2 py-0.5 text-[9px] uppercase tracking-widest ${s.outcome === "victory" ? "border-lime/40 text-lime" : "border-red-500/40 text-red-400"}`}>
+              {s.outcome}
+            </span>
+          )}
+        </div>
+
+        {/* Boss HP — the hero bar */}
+        <div className="mb-6 border border-border bg-bg-raised p-4">
+          <div className="mb-2 flex items-baseline justify-between">
+            <span className="text-[11px] uppercase tracking-widest text-muted">Boss HP</span>
+            <span className="text-[11px] text-cream">
+              {s.total_damage.toLocaleString()} <span className="text-dim">/ {s.boss_max_hp.toLocaleString()} dmg</span>
+            </span>
+          </div>
+          <div className="relative h-5 w-full overflow-hidden border border-border bg-bg">
+            <div
+              className={`absolute inset-y-0 left-0 transition-all duration-500 ${hpPct >= 100 ? "bg-lime" : hpPct >= 75 ? "bg-amber-400" : "bg-red-500"}`}
+              style={{ width: `${Math.max(hpPct, 1)}%` }}
+            />
+            <span className="absolute inset-0 flex items-center justify-center text-[10px] text-cream mix-blend-difference">
+              {hpPct.toFixed(1)}% defeated
+            </span>
+          </div>
         </div>
 
         {/* Headline stats */}
@@ -136,8 +171,9 @@ export default function EventMetricsPage({ params }: { params: Promise<{ id: str
             )}
             {s.status === "wrap" && (
               <button disabled={busy} onClick={() => patch({ action: "release" }, "Release rewards now? This grants Pixels/items to winners.")}
-                className="border border-lime/40 px-3 py-1.5 text-[10px] text-lime transition-colors hover:bg-lime/10 disabled:opacity-40">
-                Release rewards
+                className="bg-lime px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-bg transition-opacity hover:opacity-90 disabled:opacity-40"
+                style={{ boxShadow: "3px 3px 0 0 #2a2a30" }}>
+                Release rewards →
               </button>
             )}
           </div>
@@ -218,19 +254,22 @@ export default function EventMetricsPage({ params }: { params: Promise<{ id: str
           <p className="mb-3 text-[11px] text-muted">TOP 20</p>
           <div className="border border-border bg-bg-raised">
             {m.leaderboard.map((row, i) => (
-              <div key={row.login} className={`flex items-center justify-between px-4 py-2 text-[11px] ${i > 0 ? "border-t border-border" : ""}`}>
+              <div key={row.login} className={`flex items-center justify-between px-4 py-2 text-[11px] ${i > 0 ? "border-t border-border" : ""} ${i < 3 ? "bg-lime/[0.03]" : ""}`}>
                 <div className="flex items-center gap-3">
-                  <span className="w-6 text-right text-dim">{row.rank ?? "—"}</span>
-                  <span className="text-cream">{row.login}</span>
-                  {row.tier && <span className="text-[9px] uppercase text-lime">{row.tier}</span>}
-                  {row.flagged && <span className="text-[9px] uppercase text-red-400">outlier</span>}
+                  <span className={`w-6 text-right ${i < 3 ? `${MEDAL[i]} text-sm` : "text-dim"}`}>{i < 3 ? "●" : (row.rank ?? "—")}</span>
+                  <span className={i < 3 ? "text-cream" : "text-cream-dark"}>{row.login}</span>
+                  {row.tier && <span className="border border-lime/30 px-1 text-[9px] uppercase text-lime">{row.tier}</span>}
+                  {row.flagged && <span className="border border-red-500/40 px-1 text-[9px] uppercase text-red-400">outlier</span>}
                 </div>
                 <div className="flex gap-4 text-dim">
-                  <span>{row.damage.toLocaleString()} dmg</span>
-                  <span>{row.minions} min</span>
+                  <span className={i < 3 ? "text-lime" : ""}>{row.damage.toLocaleString()} dmg</span>
+                  <span className="w-14 text-right">{row.minions} min</span>
                 </div>
               </div>
             ))}
+            {m.leaderboard.length === 0 && (
+              <div className="px-4 py-6 text-center text-[10px] text-dim">No fighters yet</div>
+            )}
           </div>
         </div>
       </div>

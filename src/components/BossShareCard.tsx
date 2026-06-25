@@ -173,10 +173,14 @@ export default function BossShareCard({ accentColor, shadowColor, leaderboard = 
 
   if (!open) return null;
 
+  // Personalized share URL → unfurls a custom OG card with the player's stats.
+  const shareUrl = selfLogin
+    ? `https://www.thegitcity.com/battle/boss/${encodeURIComponent(selfLogin.toLowerCase())}`
+    : "https://www.thegitcity.com";
   const tweetText = encodeURIComponent(
-    `Just helped defeat the Original Bug in Git City. Dealt ${playerDamage.toLocaleString()} damage, ranked #${yourRank}/${totalParticipants}.\n\nthegitcity.com`,
+    `Just helped defeat the Original Bug in Git City. Dealt ${playerDamage.toLocaleString()} damage, ranked #${yourRank}/${totalParticipants}.`,
   );
-  const tweetUrl = `https://x.com/intent/tweet?text=${tweetText}`;
+  const tweetUrl = `https://x.com/intent/tweet?text=${tweetText}&url=${encodeURIComponent(shareUrl)}`;
 
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center bg-bg/90 backdrop-blur-md font-pixel uppercase">
